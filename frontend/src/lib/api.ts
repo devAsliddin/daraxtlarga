@@ -2,6 +2,8 @@ import axios from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export const API_BASE_URL = API_URL;
+export const SWAGGER_URL = `${API_URL}/api/docs`;
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,

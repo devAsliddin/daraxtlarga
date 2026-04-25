@@ -59,9 +59,15 @@ export class AdminController {
   }
 
   @Get('tree-locations/review')
-  @ApiOperation({ summary: 'Tekshirishni kutayotgan joylashuvlar' })
+  @ApiOperation({ summary: 'Tekshirishni kutayotgan joylashuvlar (PENDING/DISPUTED)' })
   getTreeLocationsForReview(@Query('page') page = 1, @Query('limit') limit = 20) {
     return this.admin.getTreeLocationsForReview(+page, +limit);
+  }
+
+  @Get('tree-locations/reviewed')
+  @ApiOperation({ summary: 'Ko\'rib chiqilgan joylashuvlar (VERIFIED/FRAUD)' })
+  getReviewedLocations(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.admin.getReviewedLocations(+page, +limit);
   }
 
   @Patch('tree-locations/:id/review')
@@ -72,5 +78,11 @@ export class AdminController {
     @Body() body: { action: 'VERIFIED' | 'FRAUD'; notes?: string },
   ) {
     return this.admin.reviewTreeLocation(id, req.user.id, body.action, body.notes);
+  }
+
+  @Patch('tree-locations/:id/reset')
+  @ApiOperation({ summary: 'Joylashuvni qayta ko\'rib chiqishga qaytarish' })
+  resetTreeLocation(@Param('id') id: string) {
+    return this.admin.resetTreeLocation(id);
   }
 }

@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Cpu,
+  ExternalLink,
   Eye,
   Image,
   LocateFixed,
@@ -23,7 +24,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import api, { SWAGGER_URL } from '@/lib/api';
 import { UZBEKISTAN_REGIONS } from '@/lib/regions';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -39,6 +40,158 @@ const EMPTY_FORM = {
   stateReportedCount: '',
   status: 'PENDING' as TreeStatus,
 };
+
+function LocationCard({
+  location,
+  mode,
+  onVerify,
+  onFraud,
+  onReset,
+  isLoading,
+  onViewPhoto,
+}: {
+  location: any;
+  mode: 'pending' | 'reviewed';
+  onVerify?: (id: string) => void;
+  onFraud?: (id: string) => void;
+  onReset?: (id: string) => void;
+  isLoading: boolean;
+  onViewPhoto: (photos: string[], index: number) => void;
+}) {
+  const statusColors: Record<string, string> = {
+    VERIFIED: 'bg-green-900/50 text-green-400',
+    FRAUD: 'bg-red-900/50 text-red-400',
+    DISPUTED: 'bg-orange-900/50 text-orange-400',
+    PENDING: 'bg-yellow-900/50 text-yellow-400',
+  };
+  const borderColor: Record<string, string> = {
+    VERIFIED: 'border-l-green-600',
+    FRAUD: 'border-l-red-600',
+    DISPUTED: 'border-l-orange-500',
+    PENDING: 'border-l-blue-600',
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`card border-l-4 ${borderColor[location.status] || 'border-l-blue-600'}`}
+    >
+      <div className="flex items-start justify-between mb-2 gap-3">
+        <div>
+          <p className="font-semibold text-white text-sm">
+            {location.region}{location.district ? `, ${location.district}` : ''}
+          </p>
+          <p className="text-gray-500 text-xs">
+            {location.species || 'Daraxt turi kiritilmagan'} • {location.stateReportedCount} ta
+          </p>
+          <p className="text-gray-600 text-xs mt-0.5">
+            {location.lat?.toFixed(5)}, {location.lng?.toFixed(5)}
+          </p>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${statusColors[location.status] || ''}`}>
+          {location.status === 'VERIFIED' ? '✅ Tasdiqlangan'
+            : location.status === 'FRAUD' ? '🚨 Rad etildi'
+            : location.status === 'DISPUTED' ? '⚠️ Munozarali'
+            : '⏳ Kutilmoqda'}
+        </span>
+      </div>
+
+      {/* Verification info + photos */}
+      {location._count?.verifications > 0 && (
+        <div className="mb-3">
+          <div className="bg-gray-800/50 rounded-lg p-2 mb-2 text-xs text-gray-400">
+            <span className="text-gray-300 font-medium">{location._count.verifications}</span> ta tekshiruv
+            {location.verifications?.[0] && (
+              <span className="ml-2">
+                • <span className="text-primary-400">{location.verifications[0].treeCount} daraxt</span>
+                , sog'liq: <span className="text-green-400">{location.verifications[0].healthScore}%</span>
+                {location.verifications[0].user?.username && (
+                  <span className="text-gray-500"> — @{location.verifications[0].user.username}</span>
+                )}
+              </span>
+            )}
+          </div>
+          {location.verifications?.[0]?.photos?.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1 mb-1.5">
+                <Image size={11} className="text-gray-500" />
+                <span className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">
+                  Rasmlar ({location.verifications[0].photos.length})
+                </span>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {location.verifications[0].photos.map((photo: string, i: number) => (
+                  <button
+                    key={i}
+                    onClick={() => onViewPhoto(location.verifications[0].photos, i)}
+                    className="flex-shrink-0 relative group"
+                  >
+                    <img
+                      src={photo}
+                      alt={`Rasm ${i + 1}`}
+                      className="w-20 h-20 rounded-xl object-cover border-2 border-gray-700 group-hover:border-primary-500 transition-colors"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl transition-all flex items-center justify-center">
+                      <Eye size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {location._count?.verifications === 0 && (
+        <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-xs text-gray-500">
+          Hali hech kim tekshirmagan
+        </div>
+      )}
+
+      {/* Actions */}
+      {mode === 'pending' && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => onVerify?.(location.id)}
+            disabled={isLoading}
+            className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-green-900/30 border border-green-700 text-green-400 rounded-xl text-sm font-semibold active:scale-95 transition-transform"
+          >
+            <TreePine size={14} />
+            Tasdiqlash
+          </button>
+          <button
+            onClick={() => onFraud?.(location.id)}
+            disabled={isLoading}
+            className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-red-900/30 border border-red-700 text-red-400 rounded-xl text-sm font-semibold active:scale-95 transition-transform"
+          >
+            <XCircle size={14} />
+            Qabul qilinmadi
+          </button>
+        </div>
+      )}
+
+      {mode === 'reviewed' && (
+        <div className="flex gap-2">
+          <div className={`flex-1 text-center py-2 rounded-xl text-xs font-bold ${
+            location.status === 'VERIFIED'
+              ? 'bg-green-900/20 text-green-400'
+              : 'bg-red-900/20 text-red-400'
+          }`}>
+            {location.status === 'VERIFIED' ? '✅ Tasdiqlangan' : '🚨 Qabul qilinmadi'}
+          </div>
+          <button
+            onClick={() => onReset?.(location.id)}
+            disabled={isLoading}
+            className="flex items-center gap-1 px-3 py-2 bg-gray-800 border border-gray-700 text-gray-300 rounded-xl text-xs font-semibold active:scale-95 transition-transform"
+          >
+            <AlertTriangle size={13} />
+            Qayta ko'rish
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 function formatDate(value?: string) {
   if (!value) {
@@ -98,6 +251,8 @@ export default function AdminPage() {
     enabled: isAdmin,
   });
 
+  const [tab, setTab] = useState<'pending' | 'reviewed'>('pending');
+
   const { data: locationsForReview } = useQuery({
     queryKey: ['admin-locations-review'],
     queryFn: async () => {
@@ -105,6 +260,16 @@ export default function AdminPage() {
       return data;
     },
     enabled: isAdmin,
+    refetchInterval: 30000,
+  });
+
+  const { data: reviewedLocations } = useQuery({
+    queryKey: ['admin-locations-reviewed'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/tree-locations/reviewed');
+      return data;
+    },
+    enabled: isAdmin && tab === 'reviewed',
     refetchInterval: 30000,
   });
 
@@ -128,12 +293,29 @@ export default function AdminPage() {
     },
     onSuccess: (_, { action }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-locations-review'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-locations-reviewed'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['map-trees'] });
-      toast.success(action === 'VERIFIED' ? 'Joylashuv tasdiqlandi — daraxt bor!' : 'Joylashuv rad etildi — daraxt yo\'q');
+      toast.success(action === 'VERIFIED' ? '✅ Tasdiqlandi — daraxt bor!' : '🚨 Rad etildi — daraxt yo\'q');
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Joylashuvni yangilashda xatolik');
+    },
+  });
+
+  const resetLocationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.patch(`/admin/tree-locations/${id}/reset`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-locations-review'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-locations-reviewed'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['map-trees'] });
+      toast.success('Qayta ko\'rib chiqishga qaytarildi');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Xatolik');
     },
   });
 
@@ -244,10 +426,19 @@ export default function AdminPage() {
         <button onClick={() => router.back()} className="text-gray-400">
           <ArrowLeft size={24} />
         </button>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-black text-xl text-white">Admin Panel</h1>
           <p className="text-xs text-gray-500">Daraxt nuqtalari va audit boshqaruvi</p>
         </div>
+        <a
+          href={SWAGGER_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-primary-800/60 bg-primary-900/30 px-3 py-2 text-xs font-bold text-primary-300 active:scale-95 transition-transform"
+        >
+          Swagger
+          <ExternalLink size={14} />
+        </a>
       </header>
 
       <div className="p-4 space-y-6">
@@ -512,127 +703,81 @@ export default function AdminPage() {
           </section>
         )}
 
+        {/* === TEKSHIRISH SECTION === */}
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Eye size={18} className="text-blue-400" />
-            <h2 className="font-bold text-gray-300">
-              Joylashuvlarni tekshirish ({locationsForReview?.total || 0})
-            </h2>
+            <h2 className="font-bold text-gray-300">Joylashuvlarni tekshirish</h2>
           </div>
-          <p className="text-sm text-gray-500 mb-3">
-            Quyidagi joylashuvlarda haqiqatan daraxt bormi yoki yo'qmi — admin tasdiqlashi kerak.
-          </p>
-          <div className="space-y-3">
-            {locationsForReview?.items?.map((location: any) => (
-              <motion.div
-                key={location.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="card border-l-4 border-l-blue-600"
-              >
-                <div className="flex items-start justify-between mb-2 gap-3">
-                  <div>
-                    <p className="font-semibold text-white text-sm">
-                      {location.region}{location.district ? `, ${location.district}` : ''}
-                    </p>
-                    <p className="text-gray-500 text-xs">
-                      {location.species || 'Daraxt turi kiritilmagan'} • {location.stateReportedCount} ta daraxt (davlat ma'lumoti)
-                    </p>
-                    <p className="text-gray-600 text-xs mt-1">
-                      {location.lat?.toFixed(5)}, {location.lng?.toFixed(5)}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      location.status === 'DISPUTED'
-                        ? 'bg-orange-900/50 text-orange-400'
-                        : 'bg-yellow-900/50 text-yellow-400'
-                    }`}
-                  >
-                    {location.status}
-                  </span>
-                </div>
 
-                {location._count?.verifications > 0 && (
-                  <div className="mb-3">
-                    <div className="bg-gray-800/50 rounded-lg p-2 mb-2 text-xs text-gray-400">
-                      <span className="text-gray-300 font-medium">{location._count.verifications}</span> ta foydalanuvchi tekshiruvi mavjud
-                      {location.verifications?.[0] && (
-                        <span className="ml-2">
-                          • So'nggi: <span className="text-primary-400">{location.verifications[0].treeCount} daraxt</span>
-                          , sog'liq: <span className="text-green-400">{location.verifications[0].healthScore}%</span>
-                          {location.verifications[0].user?.username && (
-                            <span className="text-gray-500"> — @{location.verifications[0].user.username}</span>
-                          )}
-                        </span>
-                      )}
-                    </div>
-                    {/* Photos */}
-                    {location.verifications?.[0]?.photos?.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-1 mb-1.5">
-                          <Image size={11} className="text-gray-500" />
-                          <span className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">
-                            Yuborilgan rasmlar ({location.verifications[0].photos.length})
-                          </span>
-                        </div>
-                        <div className="flex gap-2 overflow-x-auto pb-1">
-                          {location.verifications[0].photos.map((photo: string, i: number) => (
-                            <button
-                              key={i}
-                              onClick={() => setPhotoViewer({ photos: location.verifications[0].photos, index: i })}
-                              className="flex-shrink-0 relative group"
-                            >
-                              <img
-                                src={photo}
-                                alt={`Rasm ${i + 1}`}
-                                className="w-20 h-20 rounded-xl object-cover border-2 border-gray-700 group-hover:border-primary-500 transition-colors"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl transition-all flex items-center justify-center">
-                                <Eye size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {location._count?.verifications === 0 && (
-                  <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-xs text-gray-500">
-                    Hali hech kim tekshirmagan
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => reviewLocationMutation.mutate({ id: location.id, action: 'VERIFIED' })}
-                    disabled={reviewLocationMutation.isPending}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-green-900/30 border border-green-700 text-green-400 rounded-xl text-sm font-medium"
-                  >
-                    <TreePine size={14} />
-                    Daraxt bor — Tasdiqlash
-                  </button>
-                  <button
-                    onClick={() => reviewLocationMutation.mutate({ id: location.id, action: 'FRAUD' })}
-                    disabled={reviewLocationMutation.isPending}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-red-900/30 border border-red-700 text-red-400 rounded-xl text-sm font-medium"
-                  >
-                    <XCircle size={14} />
-                    Daraxt yo'q
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-
-            {!locationsForReview?.items?.length && (
-              <div className="text-center py-8 text-gray-500 card">
-                <div className="text-4xl mb-2">✓</div>
-                <p>Tekshirishni kutayotgan joylashuv yo'q</p>
-              </div>
-            )}
+          {/* Tabs */}
+          <div className="flex gap-1 mb-4 bg-gray-900 rounded-2xl p-1">
+            <button
+              onClick={() => setTab('pending')}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${
+                tab === 'pending'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              ⏳ Kutilmoqda ({locationsForReview?.total || 0})
+            </button>
+            <button
+              onClick={() => setTab('reviewed')}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${
+                tab === 'reviewed'
+                  ? 'bg-gray-700 text-white shadow'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Ko'rilgan ({reviewedLocations?.total || '...'})
+            </button>
           </div>
+
+          {/* PENDING tab */}
+          {tab === 'pending' && (
+            <div className="space-y-3">
+              {locationsForReview?.items?.map((location: any) => (
+                <LocationCard
+                  key={location.id}
+                  location={location}
+                  mode="pending"
+                  onVerify={(id) => reviewLocationMutation.mutate({ id, action: 'VERIFIED' })}
+                  onFraud={(id) => reviewLocationMutation.mutate({ id, action: 'FRAUD' })}
+                  isLoading={reviewLocationMutation.isPending}
+                  onViewPhoto={(photos, i) => setPhotoViewer({ photos, index: i })}
+                />
+              ))}
+              {!locationsForReview?.items?.length && (
+                <div className="text-center py-8 text-gray-500 card">
+                  <div className="text-4xl mb-2">✓</div>
+                  <p>Tekshirishni kutayotgan joylashuv yo'q</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* REVIEWED tab */}
+          {tab === 'reviewed' && (
+            <div className="space-y-3">
+              {reviewedLocations?.items?.map((location: any) => (
+                <LocationCard
+                  key={location.id}
+                  location={location}
+                  mode="reviewed"
+                  onReset={(id) => resetLocationMutation.mutate(id)}
+                  isLoading={resetLocationMutation.isPending}
+                  onViewPhoto={(photos, i) => setPhotoViewer({ photos, index: i })}
+                />
+              ))}
+              {!reviewedLocations?.items?.length && (
+                <div className="text-center py-8 text-gray-500 card">
+                  <div className="text-4xl mb-2">📋</div>
+                  <p>Ko'rilgan joylashuvlar yo'q</p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <section>
