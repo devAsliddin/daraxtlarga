@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   CheckCircle,
   Cpu,
+  Eye,
   LocateFixed,
   MapPinned,
   PlusCircle,
@@ -92,6 +93,16 @@ export default function AdminPage() {
     enabled: isAdmin,
   });
 
+  const { data: locationsForReview } = useQuery({
+    queryKey: ['admin-locations-review'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/tree-locations/review');
+      return data;
+    },
+    enabled: isAdmin,
+    refetchInterval: 30000,
+  });
+
   const reviewMutation = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: 'CONFIRMED' | 'REJECTED' }) => {
       await api.patch(`/admin/reports/${id}/review`, { action });
@@ -103,6 +114,21 @@ export default function AdminPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Hisobotni yangilashda xatolik');
+    },
+  });
+
+  const reviewLocationMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: 'VERIFIED' | 'FRAUD' }) => {
+      await api.patch(`/admin/tree-locations/${id}/review`, { action });
+    },
+    onSuccess: (_, { action }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-locations-review'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['map-trees'] });
+      toast.success(action === 'VERIFIED' ? 'Joylashuv tasdiqlandi — daraxt bor!' : 'Joylashuv rad etildi — daraxt yo\'q');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Joylashuvni yangilashda xatolik');
     },
   });
 
@@ -435,6 +461,95 @@ export default function AdminPage() {
             )}
           </section>
         )}
+
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Eye size={18} className="text-blue-400" />
+            <h2 className="font-bold text-gray-300">
+              Joylashuvlarni tekshirish ({locationsForReview?.total || 0})
+            </h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-3">
+            Quyidagi joylashuvlarda haqiqatan daraxt bormi yoki yo'qmi — admin tasdiqlashi kerak.
+          </p>
+          <div className="space-y-3">
+            {locationsForReview?.items?.map((location: any) => (
+              <motion.div
+                key={location.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card border-l-4 border-l-blue-600"
+              >
+                <div className="flex items-start justify-between mb-2 gap-3">
+                  <div>
+                    <p className="font-semibold text-white text-sm">
+                      {location.region}{location.district ? `, ${location.district}` : ''}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {location.species || 'Daraxt turi kiritilmagan'} • {location.stateReportedCount} ta daraxt (davlat ma'lumoti)
+                    </p>
+                    <p className="text-gray-600 text-xs mt-1">
+                      {location.lat?.toFixed(5)}, {location.lng?.toFixed(5)}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      location.status === 'DISPUTED'
+                        ? 'bg-orange-900/50 text-orange-400'
+                        : 'bg-yellow-900/50 text-yellow-400'
+                    }`}
+                  >
+                    {location.status}
+                  </span>
+                </div>
+
+                {location._count?.verifications > 0 && (
+                  <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-xs text-gray-400">
+                    <span className="text-gray-300 font-medium">{location._count.verifications}</span> ta foydalanuvchi tekshiruvi mavjud
+                    {location.verifications?.[0] && (
+                      <span className="ml-2">
+                        • So'nggi: <span className="text-primary-400">{location.verifications[0].treeCount} daraxt aniqlandi</span>
+                        , sog'liq: <span className="text-green-400">{location.verifications[0].healthScore}%</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {location._count?.verifications === 0 && (
+                  <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-xs text-gray-500">
+                    Hali hech kim tekshirmagan
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => reviewLocationMutation.mutate({ id: location.id, action: 'VERIFIED' })}
+                    disabled={reviewLocationMutation.isPending}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-green-900/30 border border-green-700 text-green-400 rounded-xl text-sm font-medium"
+                  >
+                    <TreePine size={14} />
+                    Daraxt bor — Tasdiqlash
+                  </button>
+                  <button
+                    onClick={() => reviewLocationMutation.mutate({ id: location.id, action: 'FRAUD' })}
+                    disabled={reviewLocationMutation.isPending}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-red-900/30 border border-red-700 text-red-400 rounded-xl text-sm font-medium"
+                  >
+                    <XCircle size={14} />
+                    Daraxt yo'q
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+
+            {!locationsForReview?.items?.length && (
+              <div className="text-center py-8 text-gray-500 card">
+                <div className="text-4xl mb-2">✓</div>
+                <p>Tekshirishni kutayotgan joylashuv yo'q</p>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section>
           <h2 className="font-bold text-gray-300 mb-3">

@@ -110,6 +110,62 @@ export class AdminService {
     });
   }
 
+  async getTreeLocationsForReview(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.prisma.treeLocation.findMany({
+        where: { status: { in: ['PENDING', 'DISPUTED'] } },
+        include: {
+          verifications: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              photos: true,
+              healthScore: true,
+              treeCount: true,
+              createdAt: true,
+              user: { select: { username: true } },
+            },
+          },
+          _count: { select: { verifications: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.treeLocation.count({ where: { status: { in: ['PENDING', 'DISPUTED'] } } }),
+    ]);
+
+    return {
+      items: items.map((item) => ({
+        ...item,
+        verifications: item.verifications.map((v) => ({
+          ...v,
+          photos: parseJson<string[]>(v.photos, []),
+        })),
+      })),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
+  }
+
+  async reviewTreeLocation(
+    locationId: string,
+    adminId: string,
+    action: 'VERIFIED' | 'FRAUD',
+    notes?: string,
+  ) {
+    return this.prisma.treeLocation.update({
+      where: { id: locationId },
+      data: {
+        status: action,
+        verifiedByUserId: adminId,
+        verifiedAt: new Date(),
+      },
+    });
+  }
+
   async getAllUsers(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([

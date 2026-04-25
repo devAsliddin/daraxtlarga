@@ -57,4 +57,20 @@ export class AdminController {
   createTreeLocation(@Req() req: any, @Body() body: CreateTreeLocationDto) {
     return this.admin.createTreeLocation(req.user.id, body);
   }
+
+  @Get('tree-locations/review')
+  @ApiOperation({ summary: 'Tekshirishni kutayotgan joylashuvlar' })
+  getTreeLocationsForReview(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.admin.getTreeLocationsForReview(+page, +limit);
+  }
+
+  @Patch('tree-locations/:id/review')
+  @ApiOperation({ summary: 'Joylashuvni tekshirish: bu haqiqiy daraxtmi yoki yo`q' })
+  reviewTreeLocation(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body: { action: 'VERIFIED' | 'FRAUD'; notes?: string },
+  ) {
+    return this.admin.reviewTreeLocation(id, req.user.id, body.action, body.notes);
+  }
 }
