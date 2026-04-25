@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import { Camera, CheckCircle, AlertTriangle, Coins, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Camera, CheckCircle, AlertTriangle, Coins, ArrowLeft, RotateCcw, Map } from 'lucide-react';
 
 const MAX_PHOTOS = 3;
 const CAPTURE_MAX_WIDTH = 960;
 const CAPTURE_JPEG_QUALITY = 0.72;
+const CAPTURE_RADIUS_M = 500;
 
 type Step = 'liveness' | 'camera' | 'analyzing' | 'result';
 
@@ -17,6 +18,25 @@ interface LivenessChallenge {
   id: string;
   instruction: string;
   emoji: string;
+}
+
+interface TreeLocation {
+  id: string;
+  lat: number;
+  lng: number;
+  status: 'PENDING' | 'VERIFIED' | 'DISPUTED' | 'FRAUD';
+}
+
+function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const CHALLENGES: LivenessChallenge[] = [
@@ -32,9 +52,15 @@ function CaptureContent() {
   const router = useRouter();
   const { user, addTokens } = useAuthStore();
 
-  const treeId = params.get('treeId');
-  const lat = parseFloat(params.get('lat') || '41.2995');
-  const lng = parseFloat(params.get('lng') || '69.2401');
+  const requestedTreeId = params.get('treeId');
+  const requestedLat = Number.parseFloat(params.get('lat') || '');
+  const requestedLng = Number.parseFloat(params.get('lng') || '');
+  const [autoTree, setAutoTree] = useState<TreeLocation | null>(null);
+  const [resolvingTree, setResolvingTree] = useState(!requestedTreeId);
+
+  const treeId = requestedTreeId || autoTree?.id || null;
+  const lat = Number.isFinite(requestedLat) ? requestedLat : autoTree?.lat ?? 41.2995;
+  const lng = Number.isFinite(requestedLng) ? requestedLng : autoTree?.lng ?? 69.2401;
 
   const [step, setStep] = useState<Step>('liveness');
   const [challenges, setChallenges] = useState<LivenessChallenge[]>([]);
@@ -63,6 +89,78 @@ function CaptureContent() {
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }, [lat, lng]);
+
+  useEffect(() => {
+    if (requestedTreeId) {
+      setResolvingTree(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const getCurrentPosition = () =>
+      new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 12000 },
+        );
+      });
+
+    const resolveTreeFromLocation = async () => {
+      setResolvingTree(true);
+
+      try {
+        const gps = await getCurrentPosition();
+        if (cancelled) return;
+        if (gps) setUserGps(gps);
+
+        const { data } = await api.get('/trees/map');
+        if (cancelled) return;
+
+        const candidates = (data as TreeLocation[]).filter(
+          (tree) => tree.status === 'PENDING' || tree.status === 'DISPUTED',
+        );
+
+        if (gps) {
+          const nearest = candidates
+            .map((tree) => ({
+              tree,
+              distance: getDistanceMeters(gps.lat, gps.lng, tree.lat, tree.lng),
+            }))
+            .sort((a, b) => a.distance - b.distance)[0];
+
+          if (nearest && nearest.distance <= CAPTURE_RADIUS_M) {
+            setAutoTree(nearest.tree);
+            localStorage.setItem('yq:selected-tree', JSON.stringify(nearest.tree));
+            toast.success(`Yaqin lokatsiya tanlandi: ${Math.round(nearest.distance)} m`);
+            return;
+          }
+        }
+
+        const savedRaw = localStorage.getItem('yq:selected-tree');
+        const saved = savedRaw ? JSON.parse(savedRaw) as TreeLocation : null;
+        const savedCandidate = saved ? candidates.find((tree) => tree.id === saved.id) : null;
+
+        if (!gps && savedCandidate) {
+          setAutoTree(savedCandidate);
+          return;
+        }
+
+        setAutoTree(null);
+      } catch {
+        setAutoTree(null);
+      } finally {
+        if (!cancelled) setResolvingTree(false);
+      }
+    };
+
+    resolveTreeFromLocation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedTreeId]);
 
   const startCamera = async () => {
     try {
@@ -178,10 +276,57 @@ function CaptureContent() {
     );
   }
 
+  if (resolvingTree) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex flex-col">
+        <header className="flex items-center gap-3 px-4 pb-3 bg-gray-900 border-b border-gray-800" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+          <button onClick={() => router.back()} className="text-gray-400 hover:text-white">
+            <ArrowLeft size={24} />
+          </button>
+          <h1 className="font-bold text-white">Daraxt Skanning</h1>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="text-5xl mb-5 animate-pulse">📍</div>
+          <h2 className="text-2xl font-bold mb-3 text-white">Lokatsiya aniqlanmoqda</h2>
+          <p className="text-gray-400 leading-relaxed max-w-xs">
+            Oldingizdagi eng yaqin tekshiriladigan daraxt nuqtasi qidirilmoqda...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!treeId) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex flex-col">
+        <header className="flex items-center gap-3 px-4 pb-3 bg-gray-900 border-b border-gray-800" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+          <button onClick={() => router.back()} className="text-gray-400 hover:text-white">
+            <ArrowLeft size={24} />
+          </button>
+          <h1 className="font-bold text-white">Daraxt Skanning</h1>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="text-7xl mb-5">🗺️</div>
+          <h2 className="text-2xl font-bold mb-3 text-white">Daraxt tanlang</h2>
+          <p className="text-gray-400 mb-8 leading-relaxed max-w-xs">
+            Skanning qilish uchun xaritadan daraxt joylashuvini tanlang va u yerdan kamerani oching
+          </p>
+          <button
+            onClick={() => router.push('/map')}
+            className="btn-primary px-8 py-4 text-lg flex items-center gap-2"
+          >
+            <Map size={20} />
+            Xaritaga o'tish
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-3 bg-gray-900 border-b border-gray-800">
+      <header className="flex items-center gap-3 px-4 pb-3 bg-gray-900 border-b border-gray-800" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
         <button onClick={() => router.back()} className="text-gray-400 hover:text-white">
           <ArrowLeft size={24} />
         </button>
@@ -291,7 +436,7 @@ function CaptureContent() {
             </div>
 
             {/* Controls */}
-            <div className="bg-gray-900 p-6 flex items-center justify-between">
+            <div className="bg-gray-900 px-6 pt-5 flex items-center justify-between" style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
               <button
                 onClick={() => setPhotos([])}
                 className="btn-secondary p-3"

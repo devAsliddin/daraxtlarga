@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Map, Camera, Trophy, User, Settings } from 'lucide-react';
+import { Map, Camera, Trophy, User, Settings, ListChecks } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '@/store/auth.store';
 import { motion } from 'framer-motion';
@@ -12,7 +12,7 @@ const LEFT_ITEMS = [
 ];
 
 const RIGHT_ITEMS = [
-  { href: '/quests', icon: Settings, label: 'Vazifalar' },
+  { href: '/quests', icon: ListChecks, label: 'Vazifalar' },
   { href: '/profile', icon: User, label: 'Profil' },
 ];
 
@@ -24,104 +24,93 @@ export function BottomNav() {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
   const isCaptureActive = pathname === '/capture' || pathname.startsWith('/capture/');
 
-  return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-[1200]"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
-      <div className="glass-dark border-t border-white/6 shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
-        <div className="flex items-end justify-around px-2 pt-2 pb-3 max-w-lg mx-auto relative">
+  const NavItem = ({ href, icon: Icon, label }: { href: string; icon: any; label: string }) => {
+    const active = isActive(href);
+    return (
+      <Link
+        href={href}
+        className="flex flex-col items-center gap-1 py-2 flex-1 transition-all duration-200 active:scale-95"
+      >
+        <div className={clsx(
+          'relative flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-200',
+          active ? 'bg-primary-500/20' : 'bg-transparent',
+        )}>
+          <Icon
+            size={22}
+            strokeWidth={active ? 2.5 : 1.8}
+            className={active ? 'text-primary-400' : 'text-gray-500'}
+          />
+          {active && (
+            <motion.div
+              layoutId="nav-indicator"
+              className="absolute inset-0 rounded-2xl ring-1 ring-primary-500/40"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
+        </div>
+        <span className={clsx(
+          'text-[10px] font-semibold leading-none',
+          active ? 'text-primary-400' : 'text-gray-500',
+        )}>
+          {label}
+        </span>
+      </Link>
+    );
+  };
 
-          {/* Left items */}
-          {LEFT_ITEMS.map(({ href, icon: Icon, label }) => {
-            const active = isActive(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={clsx(
-                  'flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all duration-200 min-w-[56px]',
-                  active ? 'text-primary-400' : 'text-gray-500',
-                )}
-              >
-                <div className="relative">
-                  <Icon size={23} strokeWidth={active ? 2.5 : 1.8} />
-                  {active && (
-                    <motion.div
-                      layoutId={`dot-${href}`}
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary-400"
-                    />
-                  )}
-                </div>
-                <span className={clsx('text-[10px] font-semibold leading-none', active ? 'text-primary-400' : 'text-gray-600')}>
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-[1200]">
+      <div
+        className="border-t border-white/[0.07] shadow-[0_-4px_30px_rgba(0,0,0,0.6)]"
+        style={{
+          background: 'rgba(10,14,10,0.97)',
+          backdropFilter: 'blur(20px)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        <div className="flex items-end justify-around px-1 pt-1 pb-3 max-w-lg mx-auto relative">
+
+          {LEFT_ITEMS.map((item) => <NavItem key={item.href} {...item} />)}
 
           {/* Center capture button */}
-          <Link href="/capture" className="flex flex-col items-center -mt-5 px-2">
+          <Link href="/capture" className="flex flex-col items-center flex-1 -mt-4 active:scale-95 transition-transform duration-150">
             <motion.div
-              whileTap={{ scale: 0.92 }}
+              whileTap={{ scale: 0.90 }}
               className={clsx(
-                'w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all duration-200',
+                'w-[58px] h-[58px] rounded-full flex items-center justify-center shadow-2xl',
                 isCaptureActive
-                  ? 'bg-gradient-to-br from-primary-400 to-primary-600 shadow-primary-900/60 glow-green'
-                  : 'bg-gradient-to-br from-primary-500 to-primary-700 shadow-primary-900/40',
+                  ? 'bg-gradient-to-br from-primary-400 to-primary-600 shadow-primary-900/70'
+                  : 'bg-gradient-to-br from-primary-500 to-primary-700 shadow-primary-900/50',
               )}
+              style={{ boxShadow: '0 0 20px rgba(34,197,94,0.35), 0 8px 24px rgba(0,0,0,0.4)' }}
             >
-              <Camera size={26} strokeWidth={2} className="text-white" />
+              <Camera size={24} strokeWidth={2.2} className="text-white" />
             </motion.div>
             <span className={clsx(
-              'text-[10px] font-semibold mt-1.5 leading-none',
+              'text-[10px] font-semibold mt-1 leading-none',
               isCaptureActive ? 'text-primary-400' : 'text-gray-500',
             )}>
               Skanning
             </span>
           </Link>
 
-          {/* Right items */}
-          {RIGHT_ITEMS.map(({ href, icon: Icon, label }) => {
-            const active = isActive(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={clsx(
-                  'flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all duration-200 min-w-[56px]',
-                  active ? 'text-primary-400' : 'text-gray-500',
-                )}
-              >
-                <div className="relative">
-                  <Icon size={23} strokeWidth={active ? 2.5 : 1.8} />
-                  {active && (
-                    <motion.div
-                      layoutId={`dot-${href}`}
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary-400"
-                    />
-                  )}
-                </div>
-                <span className={clsx('text-[10px] font-semibold leading-none', active ? 'text-primary-400' : 'text-gray-600')}>
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
+          {RIGHT_ITEMS.map((item) => <NavItem key={item.href} {...item} />)}
 
-          {/* Admin — faqat adminlar uchun */}
+          {/* Admin */}
           {isAdmin && (
             <Link
               href="/admin"
-              className={clsx(
-                'flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all duration-200 min-w-[48px]',
-                isActive('/admin') ? 'text-yellow-400' : 'text-yellow-700',
-              )}
+              className="flex flex-col items-center gap-1 py-2 flex-1 transition-all duration-200 active:scale-95"
             >
-              <div className="relative">
-                <Settings size={20} strokeWidth={isActive('/admin') ? 2.5 : 1.8} />
+              <div className={clsx(
+                'flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-200',
+                isActive('/admin') ? 'bg-yellow-500/20' : 'bg-transparent',
+              )}>
+                <Settings size={22} strokeWidth={isActive('/admin') ? 2.5 : 1.8}
+                  className={isActive('/admin') ? 'text-yellow-400' : 'text-yellow-700'} />
               </div>
-              <span className="text-[10px] font-semibold leading-none">Admin</span>
+              <span className={clsx('text-[10px] font-semibold leading-none',
+                isActive('/admin') ? 'text-yellow-400' : 'text-yellow-700')}>Admin</span>
             </Link>
           )}
         </div>

@@ -11,13 +11,21 @@ const api = axios.create({
 
 // Attach auth token from store
 api.interceptors.request.use((config) => {
+  // First try in-memory store (always up-to-date after refresh)
+  const inMemoryToken = useAuthStore.getState().accessToken;
+  if (inMemoryToken) {
+    config.headers['Authorization'] = `Bearer ${inMemoryToken}`;
+    return config;
+  }
+
+  // Fallback to localStorage
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('yashil-quest-auth');
       if (stored) {
         const { state } = JSON.parse(stored);
         if (state?.accessToken) {
-          config.headers.Authorization = `Bearer ${state.accessToken}`;
+          config.headers['Authorization'] = `Bearer ${state.accessToken}`;
         }
       }
     } catch {}
@@ -25,29 +33,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 - try refresh
+// Handle 401 - try refresh, redirect to login on failure
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !error.config?._retry) {
+      error.config._retry = true;
       try {
-        const stored = localStorage.getItem('yashil-quest-auth');
-        if (stored) {
-          const { state } = JSON.parse(stored);
-          if (state?.refreshToken) {
-            const { data } = await axios.post(`${API_URL}/api/auth/refresh`, {
-              refreshToken: state.refreshToken,
-            });
-            // Update both in-memory store and localStorage
-            useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
-            if (data.user) {
-              useAuthStore.getState().setUser(data.user);
-            }
-            error.config.headers.Authorization = `Bearer ${data.accessToken}`;
-            return axios.request(error.config);
-          }
+        const refreshToken =
+          useAuthStore.getState().refreshToken ||
+          (() => {
+            try {
+              const stored = localStorage.getItem('yashil-quest-auth');
+              if (stored) return JSON.parse(stored).state?.refreshToken;
+            } catch {}
+            return null;
+          })();
+
+        if (refreshToken) {
+          const { data } = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });
+          useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
+          if (data.user) useAuthStore.getState().setUser(data.user);
+          error.config.headers['Authorization'] = `Bearer ${data.accessToken}`;
+          return axios.request(error.config);
         }
-      } catch {}
+      } catch {
+        // Refresh failed — clear auth and redirect to login
+        useAuthStore.setState({ user: null, accessToken: null, refreshToken: null });
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/login';
+        }
+      }
     }
     return Promise.reject(error);
   },

@@ -8,14 +8,18 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Cpu,
   Eye,
+  Image,
   LocateFixed,
   MapPinned,
   PlusCircle,
   Sprout,
   TreePine,
   Users,
+  X,
   XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -56,6 +60,7 @@ export default function AdminPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
   const [isLocating, setIsLocating] = useState(false);
+  const [photoViewer, setPhotoViewer] = useState<{ photos: string[]; index: number } | null>(null);
 
   const isAdmin = Boolean(user?.isAdmin || user?.username === 'admin');
 
@@ -190,6 +195,51 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 pb-8">
+      {/* Photo Viewer Modal */}
+      {photoViewer && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
+          onClick={() => setPhotoViewer(null)}
+        >
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-900/80">
+            <span className="text-white text-sm font-semibold">
+              Rasm {photoViewer.index + 1} / {photoViewer.photos.length}
+            </span>
+            <button
+              className="text-gray-400 hover:text-white p-2"
+              onClick={() => setPhotoViewer(null)}
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div
+            className="flex-1 flex items-center justify-center relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={photoViewer.photos[photoViewer.index]}
+              alt="Verification photo"
+              className="max-h-full max-w-full object-contain"
+            />
+            {photoViewer.photos.length > 1 && (
+              <>
+                <button
+                  className="absolute left-2 bg-black/60 rounded-full p-2 text-white"
+                  onClick={() => setPhotoViewer(v => v && { ...v, index: (v.index - 1 + v.photos.length) % v.photos.length })}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+                <button
+                  className="absolute right-2 bg-black/60 rounded-full p-2 text-white"
+                  onClick={() => setPhotoViewer(v => v && { ...v, index: (v.index + 1) % v.photos.length })}
+                >
+                  <ChevronRight size={24} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       <header className="bg-gray-900 border-b border-gray-800 px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.back()} className="text-gray-400">
           <ArrowLeft size={24} />
@@ -504,13 +554,47 @@ export default function AdminPage() {
                 </div>
 
                 {location._count?.verifications > 0 && (
-                  <div className="bg-gray-800/50 rounded-lg p-2 mb-3 text-xs text-gray-400">
-                    <span className="text-gray-300 font-medium">{location._count.verifications}</span> ta foydalanuvchi tekshiruvi mavjud
-                    {location.verifications?.[0] && (
-                      <span className="ml-2">
-                        • So'nggi: <span className="text-primary-400">{location.verifications[0].treeCount} daraxt aniqlandi</span>
-                        , sog'liq: <span className="text-green-400">{location.verifications[0].healthScore}%</span>
-                      </span>
+                  <div className="mb-3">
+                    <div className="bg-gray-800/50 rounded-lg p-2 mb-2 text-xs text-gray-400">
+                      <span className="text-gray-300 font-medium">{location._count.verifications}</span> ta foydalanuvchi tekshiruvi mavjud
+                      {location.verifications?.[0] && (
+                        <span className="ml-2">
+                          • So'nggi: <span className="text-primary-400">{location.verifications[0].treeCount} daraxt</span>
+                          , sog'liq: <span className="text-green-400">{location.verifications[0].healthScore}%</span>
+                          {location.verifications[0].user?.username && (
+                            <span className="text-gray-500"> — @{location.verifications[0].user.username}</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    {/* Photos */}
+                    {location.verifications?.[0]?.photos?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <Image size={11} className="text-gray-500" />
+                          <span className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold">
+                            Yuborilgan rasmlar ({location.verifications[0].photos.length})
+                          </span>
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {location.verifications[0].photos.map((photo: string, i: number) => (
+                            <button
+                              key={i}
+                              onClick={() => setPhotoViewer({ photos: location.verifications[0].photos, index: i })}
+                              className="flex-shrink-0 relative group"
+                            >
+                              <img
+                                src={photo}
+                                alt={`Rasm ${i + 1}`}
+                                className="w-20 h-20 rounded-xl object-cover border-2 border-gray-700 group-hover:border-primary-500 transition-colors"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-xl transition-all flex items-center justify-center">
+                                <Eye size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
