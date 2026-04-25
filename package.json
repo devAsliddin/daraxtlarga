@@ -1,0 +1,32 @@
+{
+  "name": "yashil-quest",
+  "version": "1.0.0",
+  "description": "Yashil Quest - Yashil Makon monitoring platformasi",
+  "scripts": {
+    "setup": "powershell -ExecutionPolicy Bypass -File scripts/setup.ps1",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:cv": "python -m uvicorn main:app --host 0.0.0.0 --port 8000 --app-dir cv-service",
+    "test:backend": "npm --prefix backend run test",
+    "test:frontend": "npm --prefix frontend run test",
+    "test:cv": "cd cv-service && python -m pytest test_cv.py -v",
+    "seed": "npm --prefix backend run prisma:seed",
+    "db:push": "npm --prefix backend run db:push",
+    "db:reset": "npm --prefix backend run db:reset",
+    "studio": "npm --prefix backend run prisma:studio",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "yashil-makon",
+    "uzbekistan",
+    "ecology",
+    "monitoring",
+    "blockchain",
+    "computer-vision"
+  ],
+  "author": "Yashil Quest Team",
+  "license": "MIT"
+}

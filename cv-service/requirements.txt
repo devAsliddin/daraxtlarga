@@ -1,0 +1,13 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+numpy==1.26.3
+Pillow==10.2.0
+imagehash==4.3.1
+python-multipart==0.0.6
+
+# Optional ML dependencies (comment out if GPU not available or for faster builds)
+# torch==2.1.2
+# torchvision==0.16.2
+# ultralytics==8.1.0
+# opencv-python-headless==4.9.0.80

@@ -1,0 +1,15 @@
+# Full requirements with ML models
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+numpy==1.26.3
+Pillow==10.2.0
+imagehash==4.3.1
+python-multipart==0.0.6
+
+# ML Libraries
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
+ultralytics==8.1.0
+opencv-python-headless==4.9.0.80
+exifread==3.0.0

@@ -1,0 +1,522 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle,
+  Cpu,
+  LocateFixed,
+  MapPinned,
+  PlusCircle,
+  Sprout,
+  TreePine,
+  Users,
+  XCircle,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import api from '@/lib/api';
+import { UZBEKISTAN_REGIONS } from '@/lib/regions';
+import { useAuthStore } from '@/store/auth.store';
+
+type TreeStatus = 'PENDING' | 'VERIFIED' | 'DISPUTED' | 'FRAUD';
+
+const EMPTY_FORM = {
+  region: '',
+  district: '',
+  species: '',
+  plantationDate: '',
+  lat: '',
+  lng: '',
+  stateReportedCount: '',
+  status: 'PENDING' as TreeStatus,
+};
+
+function formatDate(value?: string) {
+  if (!value) {
+    return 'Noma`lum';
+  }
+
+  return new Date(value).toLocaleString('uz-UZ', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export default function AdminPage() {
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const isAdmin = Boolean(user?.isAdmin || user?.username === 'admin');
+
+  useEffect(() => {
+    if (user && !isAdmin) {
+      router.push('/map');
+    }
+  }, [isAdmin, router, user]);
+
+  const { data: dashboard } = useQuery({
+    queryKey: ['admin-dashboard'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/dashboard');
+      return data;
+    },
+    enabled: isAdmin,
+    refetchInterval: 30000,
+  });
+
+  const { data: reports } = useQuery({
+    queryKey: ['admin-reports'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/reports/pending');
+      return data;
+    },
+    enabled: isAdmin,
+  });
+
+  const { data: ollamaStatus } = useQuery({
+    queryKey: ['ollama-status'],
+    queryFn: async () => {
+      const { data } = await api.get('/admin/ollama-status');
+      return data;
+    },
+    enabled: isAdmin,
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: 'CONFIRMED' | 'REJECTED' }) => {
+      await api.patch(`/admin/reports/${id}/review`, { action });
+    },
+    onSuccess: (_, { action }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-reports'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      toast.success(action === 'CONFIRMED' ? 'Hisobot tasdiqlandi' : 'Hisobot rad etildi');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Hisobotni yangilashda xatolik');
+    },
+  });
+
+  const createLocationMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        region: form.region,
+        district: form.district || undefined,
+        species: form.species || undefined,
+        plantationDate: form.plantationDate || undefined,
+        lat: Number(form.lat),
+        lng: Number(form.lng),
+        stateReportedCount: Number(form.stateReportedCount),
+        status: form.status,
+      };
+
+      const { data } = await api.post('/admin/tree-locations', payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['map-trees'] });
+      setForm(EMPTY_FORM);
+      toast.success('Yangi daraxt joylashuvi qo`shildi');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message;
+      toast.error(Array.isArray(message) ? message[0] : message || 'Joylashuvni qo`shib bo`lmadi');
+    },
+  });
+
+  const fillCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Brauzer geolokatsiyani qo`llamaydi');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setForm((current) => ({
+          ...current,
+          lat: position.coords.latitude.toFixed(6),
+          lng: position.coords.longitude.toFixed(6),
+        }));
+        setIsLocating(false);
+      },
+      () => {
+        toast.error('Joylashuvni olib bo`lmadi');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  if (!user || !isAdmin) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 pb-8">
+      <header className="bg-gray-900 border-b border-gray-800 px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
+        <button onClick={() => router.back()} className="text-gray-400">
+          <ArrowLeft size={24} />
+        </button>
+        <div>
+          <h1 className="font-black text-xl text-white">Admin Panel</h1>
+          <p className="text-xs text-gray-500">Daraxt nuqtalari va audit boshqaruvi</p>
+        </div>
+      </header>
+
+      <div className="p-4 space-y-6">
+        {dashboard && (
+          <section>
+            <h2 className="font-bold text-gray-300 mb-3">Umumiy ko'rsatkichlar</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                {
+                  icon: <Users size={20} className="text-blue-400" />,
+                  label: 'Foydalanuvchilar',
+                  value: dashboard.overview.totalUsers,
+                },
+                {
+                  icon: <TreePine size={20} className="text-primary-400" />,
+                  label: 'Daraxt joylari',
+                  value: dashboard.overview.totalTrees,
+                },
+                {
+                  icon: <CheckCircle size={20} className="text-green-400" />,
+                  label: 'Tekshiruvlar',
+                  value: dashboard.overview.totalVerifications,
+                },
+                {
+                  icon: <AlertTriangle size={20} className="text-red-400" />,
+                  label: 'Kutilgan hisobotlar',
+                  value: dashboard.overview.pendingReports,
+                },
+              ].map((stat) => (
+                <div key={stat.label} className="card">
+                  <div className="flex items-center gap-2 mb-1">
+                    {stat.icon}
+                    <span className="text-gray-400 text-sm">{stat.label}</span>
+                  </div>
+                  <div className="text-3xl font-black text-white">{stat.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="card mt-3">
+              <h3 className="font-semibold text-gray-300 mb-3">Daraxtlar holati</h3>
+              <div className="space-y-2">
+                {Object.entries(dashboard.treesByStatus || {}).map(([status, count]) => (
+                  <div key={status} className="flex items-center justify-between">
+                    <span
+                      className={`text-sm ${
+                        status === 'VERIFIED'
+                          ? 'text-green-400'
+                          : status === 'FRAUD'
+                            ? 'text-red-400'
+                            : status === 'DISPUTED'
+                              ? 'text-orange-400'
+                              : 'text-yellow-400'
+                      }`}
+                    >
+                      {status}
+                    </span>
+                    <span className="font-bold text-white">{count as number}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section className="card">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-semibold text-gray-100">Yangi daraxt joylashuvi</h2>
+              <p className="text-sm text-gray-500">
+                Admin shu yerdan daraxt ekilgan nuqtani xaritaga qo'shadi.
+              </p>
+            </div>
+            <MapPinned size={18} className="text-primary-400 mt-1" />
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Viloyat</label>
+              <select
+                className="input"
+                value={form.region}
+                onChange={(event) => setForm((current) => ({ ...current, region: event.target.value }))}
+              >
+                <option value="">Viloyatni tanlang</option>
+                {UZBEKISTAN_REGIONS.map((region) => (
+                  <option key={region} value={region}>
+                    {region}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Tuman</label>
+                <input
+                  className="input"
+                  value={form.district}
+                  onChange={(event) => setForm((current) => ({ ...current, district: event.target.value }))}
+                  placeholder="Masalan, Chilonzor"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Daraxt turi</label>
+                <div className="relative">
+                  <Sprout size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    className="input pl-11"
+                    value={form.species}
+                    onChange={(event) => setForm((current) => ({ ...current, species: event.target.value }))}
+                    placeholder="Masalan, Chinor"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Latitude</label>
+                <input
+                  className="input"
+                  type="number"
+                  step="0.000001"
+                  value={form.lat}
+                  onChange={(event) => setForm((current) => ({ ...current, lat: event.target.value }))}
+                  placeholder="41.299500"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Longitude</label>
+                <input
+                  className="input"
+                  type="number"
+                  step="0.000001"
+                  value={form.lng}
+                  onChange={(event) => setForm((current) => ({ ...current, lng: event.target.value }))}
+                  placeholder="69.240100"
+                />
+              </div>
+            </div>
+
+            <button onClick={fillCurrentLocation} className="btn-secondary w-full" type="button">
+              <LocateFixed size={16} className={isLocating ? 'animate-spin' : ''} />
+              {isLocating ? 'Joylashuv olinmoqda...' : 'Joriy joylashuvni olish'}
+            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Daraxt soni</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="1"
+                  value={form.stateReportedCount}
+                  onChange={(event) => setForm((current) => ({ ...current, stateReportedCount: event.target.value }))}
+                  placeholder="50"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Holat</label>
+                <select
+                  className="input"
+                  value={form.status}
+                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as TreeStatus }))}
+                >
+                  <option value="PENDING">PENDING</option>
+                  <option value="VERIFIED">VERIFIED</option>
+                  <option value="DISPUTED">DISPUTED</option>
+                  <option value="FRAUD">FRAUD</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Ekilgan sana</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={form.plantationDate}
+                  onChange={(event) => setForm((current) => ({ ...current, plantationDate: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!form.region || !form.lat || !form.lng || !form.stateReportedCount) {
+                  toast.error('Viloyat, koordinatalar va daraxt soni majburiy');
+                  return;
+                }
+                createLocationMutation.mutate();
+              }}
+              disabled={createLocationMutation.isPending}
+              className="btn-primary w-full"
+              type="button"
+            >
+              <PlusCircle size={16} />
+              {createLocationMutation.isPending ? 'Qo`shilmoqda...' : 'Location qo`shish'}
+            </button>
+          </div>
+        </section>
+
+        {dashboard?.recentTreeLocations?.length > 0 && (
+          <section>
+            <h2 className="font-bold text-gray-300 mb-3">So'nggi qo'shilgan joylar</h2>
+            <div className="space-y-2">
+              {dashboard.recentTreeLocations.map((location: any) => (
+                <div key={location.id} className="card py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white">
+                        {location.region}
+                        {location.district ? `, ${location.district}` : ''}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {location.species || 'Daraxt turi kiritilmagan'}
+                      </p>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-300">
+                      {location.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-400">
+                    <span>{location.stateReportedCount} ta daraxt</span>
+                    <span className="text-right">{formatDate(location.createdAt)}</span>
+                    <span>{location.lat.toFixed(4)}</span>
+                    <span className="text-right">{location.lng.toFixed(4)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {ollamaStatus && (
+          <section className="card">
+            <div className="flex items-center gap-2 mb-2">
+              <Cpu size={16} className={ollamaStatus.available ? 'text-green-400' : 'text-red-400'} />
+              <h3 className="font-semibold text-gray-200">Ollama AI holati</h3>
+              <span
+                className={`ml-auto text-xs px-2 py-1 rounded-full ${
+                  ollamaStatus.available
+                    ? 'bg-green-900/50 text-green-400'
+                    : 'bg-red-900/50 text-red-400'
+                }`}
+              >
+                {ollamaStatus.available ? 'Online' : 'Offline'}
+              </span>
+            </div>
+            {ollamaStatus.models?.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {ollamaStatus.models.map((model: string) => (
+                  <span key={model} className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">
+                    {model}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section>
+          <h2 className="font-bold text-gray-300 mb-3">
+            Kutilayotgan hisobotlar ({reports?.total || 0})
+          </h2>
+          <div className="space-y-3">
+            {reports?.items?.map((report: any) => (
+              <motion.div
+                key={report.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card border-l-4 border-l-red-600"
+              >
+                <div className="flex items-start justify-between mb-2 gap-3">
+                  <div>
+                    <p className="font-semibold text-white text-sm">
+                      {report.treeLocation?.region}, {report.treeLocation?.district}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {report.reporter?.username} | {formatDate(report.createdAt)}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      report.severity === 'HIGH'
+                        ? 'bg-red-900/50 text-red-400'
+                        : report.severity === 'MEDIUM'
+                          ? 'bg-orange-900/50 text-orange-400'
+                          : 'bg-yellow-900/50 text-yellow-400'
+                    }`}
+                  >
+                    {report.severity}
+                  </span>
+                </div>
+
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => reviewMutation.mutate({ id: report.id, action: 'CONFIRMED' })}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-green-900/30 border border-green-700 text-green-400 rounded-xl text-sm font-medium"
+                  >
+                    <CheckCircle size={14} />
+                    Tasdiqlash
+                  </button>
+                  <button
+                    onClick={() => reviewMutation.mutate({ id: report.id, action: 'REJECTED' })}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-red-900/30 border border-red-700 text-red-400 rounded-xl text-sm font-medium"
+                  >
+                    <XCircle size={14} />
+                    Rad etish
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+
+            {!reports?.items?.length && (
+              <div className="text-center py-8 text-gray-500 card">
+                <div className="text-4xl mb-2">OK</div>
+                <p>Barcha hisobotlar ko'rib chiqilgan</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {dashboard?.recentActivity?.length > 0 && (
+          <section>
+            <h2 className="font-bold text-gray-300 mb-3">So'nggi faollik</h2>
+            <div className="space-y-2">
+              {dashboard.recentActivity.map((activity: any) => (
+                <div key={activity.id} className="card flex items-center justify-between py-2 px-3">
+                  <div>
+                    <p className="text-sm text-white">{activity.user?.username}</p>
+                    <p className="text-xs text-gray-500">
+                      {activity.treeLocation?.region} | {formatDate(activity.createdAt)}
+                    </p>
+                  </div>
+                  <span className="text-primary-400 text-xs font-bold">+{activity.tokensEarned} GT</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}

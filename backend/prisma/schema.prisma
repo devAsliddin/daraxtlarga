@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  phone          String?  @unique
+  passwordHash   String
+  username       String   @unique
+  walletAddress  String   @unique
+  walletPrivKey  String   // AES-256-GCM encrypted (iv:authTag:ciphertext hex)
+  totalTokens    Float    @default(0)
+  level          Int      @default(1)
+  xp             Int      @default(0)
+  avatarUrl      String?
+  region         String?
+  referredBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  verifications  TreeVerification[]
+  tokenTxs       GreenToken[]
+  userQuests     UserQuest[]
+  userBadges     UserBadge[]
+  fraudReports   FraudReport[]
+  refreshTokens  RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model TreeLocation {
+  id                   String    @id @default(uuid())
+  lat                  Float
+  lng                  Float
+  stateReportedCount   Int       @default(1)
+  actualCount          Int?
+  region               String
+  district             String?
+  plantationDate       DateTime?
+  species              String?
+  status               String    @default("PENDING")
+  verifiedByUserId     String?
+  verifiedAt           DateTime?
+  blockchainHash       String?
+  prevHash             String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  verifications  TreeVerification[]
+  fraudReports   FraudReport[]
+
+  @@map("tree_locations")
+}
+
+model TreeVerification {
+  id              String   @id @default(uuid())
+  treeLocationId  String
+  userId          String
+  photos          String   // JSON array of uploaded URLs
+  livenessProof   String   // JSON object
+  exifData        String?  // JSON object
+  cvResult        String?  // JSON object
+  healthScore     Float?   // 0-100
+  treeCount       Int?     // detected by CV
+  tokensEarned    Float    @default(0)
+  blockchainHash  String?
+  prevHash        String?
+  isMonitoring    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  treeLocation    TreeLocation @relation(fields: [treeLocationId], references: [id])
+  user            User         @relation(fields: [userId], references: [id])
+
+  @@map("tree_verifications")
+}
+
+model GreenToken {
+  id              String      @id @default(uuid())
+  userId          String
+  amount          Float
+  transactionType String
+  referenceId     String?     // verification or quest id
+  description     String?
+  blockchainHash  String?
+  prevHash        String?
+  createdAt       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id])
+
+  @@map("green_tokens")
+}
+
+model Quest {
+  id                  String    @id @default(uuid())
+  title               String
+  description         String
+  type                String
+  rewardTokens        Float
+  xpReward            Int
+  completionCriteria  String
+  iconName            String?
+  activeFrom          DateTime
+  activeUntil         DateTime
+  createdAt           DateTime  @default(now())
+
+  userQuests          UserQuest[]
+
+  @@map("quests")
+}
+
+model UserQuest {
+  id          String    @id @default(uuid())
+  userId      String
+  questId     String
+  progress    String    @default("{}")
+  completedAt DateTime?
+  claimedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+  quest       Quest     @relation(fields: [questId], references: [id])
+
+  @@unique([userId, questId])
+  @@map("user_quests")
+}
+
+model Badge {
+  id               String  @id @default(uuid())
+  name             String  @unique
+  icon             String
+  description      String
+  unlockCriteria   String
+  rarity           String  @default("common") // common, rare, epic, legendary
+
+  userBadges       UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model FraudReport {
+  id                  String        @id @default(uuid())
+  treeLocationId      String
+  reportedBy          String
+  evidence            String        // JSON object
+  severity            String        @default("LOW")
+  status              String        @default("PENDING")
+  anticorruptionRef   String?
+  adminNotes          String?
+  blockchainHash      String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  treeLocation        TreeLocation  @relation(fields: [treeLocationId], references: [id])
+  reporter            User          @relation(fields: [reportedBy], references: [id])
+
+  @@map("fraud_reports")
+}

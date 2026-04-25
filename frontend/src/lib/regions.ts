@@ -1,0 +1,16 @@
+export const UZBEKISTAN_REGIONS = [
+  'Toshkent',
+  'Samarqand',
+  'Buxoro',
+  'Navoiy',
+  'Qashqadaryo',
+  'Surxondaryo',
+  'Sirdaryo',
+  'Jizzax',
+  'Xorazm',
+  "Farg'ona",
+  'Namangan',
+  'Andijon',
+  'Toshkent shahri',
+  "Qoraqalpog'iston",
+];
