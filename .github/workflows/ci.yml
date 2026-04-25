@@ -12,20 +12,6 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: yashil_quest_test
-          POSTGRES_USER: yashil
-          POSTGRES_PASSWORD: test_password
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
       redis:
         image: redis:7-alpine
         options: >-
@@ -54,17 +40,17 @@ jobs:
         working-directory: backend
         run: npx prisma generate
 
-      - name: Run database migrations
+      - name: Initialize SQLite database
         working-directory: backend
-        run: npx prisma migrate deploy
+        run: npm run db:init
         env:
-          DATABASE_URL: postgresql://yashil:test_password@localhost:5432/yashil_quest_test
+          DATABASE_URL: file:./test.db
 
       - name: Run backend tests
         working-directory: backend
         run: npm run test
         env:
-          DATABASE_URL: postgresql://yashil:test_password@localhost:5432/yashil_quest_test
+          DATABASE_URL: file:./test.db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           JWT_SECRET: test-secret-not-for-production
