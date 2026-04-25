@@ -1,15 +1,18 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Map, Camera, Trophy, User, Shield, Settings } from 'lucide-react';
+import { Map, Camera, Trophy, User, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '@/store/auth.store';
+import { motion } from 'framer-motion';
 
-const navItems = [
+const LEFT_ITEMS = [
   { href: '/map', icon: Map, label: 'Xarita' },
-  { href: '/capture', icon: Camera, label: 'Skanning' },
   { href: '/leaderboard', icon: Trophy, label: 'Reyting' },
-  { href: '/quests', icon: Shield, label: 'Vazifalar' },
+];
+
+const RIGHT_ITEMS = [
+  { href: '/quests', icon: Settings, label: 'Vazifalar' },
   { href: '/profile', icon: User, label: 'Profil' },
 ];
 
@@ -18,47 +21,110 @@ export function BottomNav() {
   const { user } = useAuthStore();
   const isAdmin = Boolean(user?.isAdmin);
 
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+  const isCaptureActive = pathname === '/capture' || pathname.startsWith('/capture/');
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[1200] border-t border-gray-800 bg-gray-900/95 shadow-[0_-12px_32px_rgba(3,7,18,0.65)] backdrop-blur-md bottom-safe">
-      <div className="flex items-center justify-around px-2 py-2 max-w-lg mx-auto">
-        {navItems.map(({ href, icon: Icon, label }) => {
-          const isActive = pathname === href || pathname.startsWith(href + '/');
-          return (
-            <Link
-              key={href}
-              href={href}
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-[1200]"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="glass-dark border-t border-white/6 shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
+        <div className="flex items-end justify-around px-2 pt-2 pb-3 max-w-lg mx-auto relative">
+
+          {/* Left items */}
+          {LEFT_ITEMS.map(({ href, icon: Icon, label }) => {
+            const active = isActive(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={clsx(
+                  'flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all duration-200 min-w-[56px]',
+                  active ? 'text-primary-400' : 'text-gray-500',
+                )}
+              >
+                <div className="relative">
+                  <Icon size={23} strokeWidth={active ? 2.5 : 1.8} />
+                  {active && (
+                    <motion.div
+                      layoutId={`dot-${href}`}
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary-400"
+                    />
+                  )}
+                </div>
+                <span className={clsx('text-[10px] font-semibold leading-none', active ? 'text-primary-400' : 'text-gray-600')}>
+                  {label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* Center capture button */}
+          <Link href="/capture" className="flex flex-col items-center -mt-5 px-2">
+            <motion.div
+              whileTap={{ scale: 0.92 }}
               className={clsx(
-                'flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-all duration-200 min-w-[60px]',
-                isActive
-                  ? 'text-primary-400 bg-primary-900/30'
-                  : 'text-gray-500 hover:text-gray-300',
+                'w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all duration-200',
+                isCaptureActive
+                  ? 'bg-gradient-to-br from-primary-400 to-primary-600 shadow-primary-900/60 glow-green'
+                  : 'bg-gradient-to-br from-primary-500 to-primary-700 shadow-primary-900/40',
               )}
             >
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 1.5} />
-              <span className="text-xs font-medium leading-none">{label}</span>
-              {isActive && (
-                <div className="w-1 h-1 rounded-full bg-primary-400" />
-              )}
-            </Link>
-          );
-        })}
-        {isAdmin && (
-          <Link
-            href="/admin"
-            className={clsx(
-              'flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-all duration-200 min-w-[60px]',
-              pathname === '/admin' || pathname.startsWith('/admin/')
-                ? 'text-yellow-400 bg-yellow-900/30'
-                : 'text-yellow-600 hover:text-yellow-400',
-            )}
-          >
-            <Settings size={22} strokeWidth={pathname === '/admin' ? 2.5 : 1.5} />
-            <span className="text-xs font-medium leading-none">Admin</span>
-            {(pathname === '/admin' || pathname.startsWith('/admin/')) && (
-              <div className="w-1 h-1 rounded-full bg-yellow-400" />
-            )}
+              <Camera size={26} strokeWidth={2} className="text-white" />
+            </motion.div>
+            <span className={clsx(
+              'text-[10px] font-semibold mt-1.5 leading-none',
+              isCaptureActive ? 'text-primary-400' : 'text-gray-500',
+            )}>
+              Skanning
+            </span>
           </Link>
-        )}
+
+          {/* Right items */}
+          {RIGHT_ITEMS.map(({ href, icon: Icon, label }) => {
+            const active = isActive(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={clsx(
+                  'flex flex-col items-center gap-1 py-1 px-4 rounded-2xl transition-all duration-200 min-w-[56px]',
+                  active ? 'text-primary-400' : 'text-gray-500',
+                )}
+              >
+                <div className="relative">
+                  <Icon size={23} strokeWidth={active ? 2.5 : 1.8} />
+                  {active && (
+                    <motion.div
+                      layoutId={`dot-${href}`}
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary-400"
+                    />
+                  )}
+                </div>
+                <span className={clsx('text-[10px] font-semibold leading-none', active ? 'text-primary-400' : 'text-gray-600')}>
+                  {label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* Admin — faqat adminlar uchun */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={clsx(
+                'flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all duration-200 min-w-[48px]',
+                isActive('/admin') ? 'text-yellow-400' : 'text-yellow-700',
+              )}
+            >
+              <div className="relative">
+                <Settings size={20} strokeWidth={isActive('/admin') ? 2.5 : 1.8} />
+              </div>
+              <span className="text-[10px] font-semibold leading-none">Admin</span>
+            </Link>
+          )}
+        </div>
       </div>
     </nav>
   );
