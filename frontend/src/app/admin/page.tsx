@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -15,9 +16,11 @@ import {
   Eye,
   Image,
   LocateFixed,
+  Map,
   MapPinned,
   PlusCircle,
   Sprout,
+  Trash2,
   TreePine,
   Users,
   X,
@@ -27,6 +30,15 @@ import toast from 'react-hot-toast';
 import api, { SWAGGER_URL } from '@/lib/api';
 import { UZBEKISTAN_REGIONS } from '@/lib/regions';
 import { useAuthStore } from '@/store/auth.store';
+
+const LocationPicker = dynamic(() => import('@/components/map/LocationPicker'), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-xl border border-gray-700 bg-gray-900 flex items-center justify-center" style={{ height: 240 }}>
+      <span className="text-gray-500 text-sm">Xarita yuklanmoqda...</span>
+    </div>
+  ),
+});
 
 type TreeStatus = 'PENDING' | 'VERIFIED' | 'DISPUTED' | 'FRAUD';
 
@@ -47,6 +59,7 @@ function LocationCard({
   onVerify,
   onFraud,
   onReset,
+  onDelete,
   isLoading,
   onViewPhoto,
 }: {
@@ -55,9 +68,16 @@ function LocationCard({
   onVerify?: (id: string) => void;
   onFraud?: (id: string) => void;
   onReset?: (id: string) => void;
+  onDelete?: (id: string) => void;
   isLoading: boolean;
   onViewPhoto: (photos: string[], index: number) => void;
 }) {
+  const STATUS_LABELS: Record<string, string> = {
+    VERIFIED: '✅ Tasdiqlangan',
+    FRAUD: '🚨 Firibgarlik',
+    DISPUTED: '⚠️ Munozarali',
+    PENDING: '⏳ Kutilmoqda',
+  };
   const statusColors: Record<string, string> = {
     VERIFIED: 'bg-green-900/50 text-green-400',
     FRAUD: 'bg-red-900/50 text-red-400',
@@ -90,10 +110,7 @@ function LocationCard({
           </p>
         </div>
         <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${statusColors[location.status] || ''}`}>
-          {location.status === 'VERIFIED' ? '✅ Tasdiqlangan'
-            : location.status === 'FRAUD' ? '🚨 Rad etildi'
-            : location.status === 'DISPUTED' ? '⚠️ Munozarali'
-            : '⏳ Kutilmoqda'}
+          {STATUS_LABELS[location.status] || location.status}
         </span>
       </div>
 
@@ -150,42 +167,66 @@ function LocationCard({
 
       {/* Actions */}
       {mode === 'pending' && (
-        <div className="flex gap-2">
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => onVerify?.(location.id)}
+              disabled={isLoading}
+              className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-green-900/30 border border-green-700 text-green-400 rounded-xl text-sm font-semibold active:scale-95 transition-transform"
+            >
+              <TreePine size={14} />
+              ✅ Tasdiqlash (GT berish)
+            </button>
+            <button
+              onClick={() => onFraud?.(location.id)}
+              disabled={isLoading}
+              className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-red-900/30 border border-red-700 text-red-400 rounded-xl text-sm font-semibold active:scale-95 transition-transform"
+            >
+              <XCircle size={14} />
+              🚨 Rad etish
+            </button>
+          </div>
           <button
-            onClick={() => onVerify?.(location.id)}
+            onClick={() => {
+              if (confirm('Bu joylashuvni o\'chirmoqchimisiz?')) onDelete?.(location.id);
+            }}
             disabled={isLoading}
-            className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-green-900/30 border border-green-700 text-green-400 rounded-xl text-sm font-semibold active:scale-95 transition-transform"
+            className="w-full flex items-center justify-center gap-1 py-2 bg-gray-800/60 border border-gray-700 text-gray-500 rounded-xl text-xs font-medium active:scale-95 transition-transform"
           >
-            <TreePine size={14} />
-            Tasdiqlash
-          </button>
-          <button
-            onClick={() => onFraud?.(location.id)}
-            disabled={isLoading}
-            className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-red-900/30 border border-red-700 text-red-400 rounded-xl text-sm font-semibold active:scale-95 transition-transform"
-          >
-            <XCircle size={14} />
-            Qabul qilinmadi
+            <Trash2 size={13} />
+            O'chirish
           </button>
         </div>
       )}
 
       {mode === 'reviewed' && (
-        <div className="flex gap-2">
-          <div className={`flex-1 text-center py-2 rounded-xl text-xs font-bold ${
-            location.status === 'VERIFIED'
-              ? 'bg-green-900/20 text-green-400'
-              : 'bg-red-900/20 text-red-400'
-          }`}>
-            {location.status === 'VERIFIED' ? '✅ Tasdiqlangan' : '🚨 Qabul qilinmadi'}
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <div className={`flex-1 text-center py-2 rounded-xl text-xs font-bold ${
+              location.status === 'VERIFIED'
+                ? 'bg-green-900/20 text-green-400'
+                : 'bg-red-900/20 text-red-400'
+            }`}>
+              {STATUS_LABELS[location.status] || location.status}
+            </div>
+            <button
+              onClick={() => onReset?.(location.id)}
+              disabled={isLoading}
+              className="flex items-center gap-1 px-3 py-2 bg-gray-800 border border-gray-700 text-gray-300 rounded-xl text-xs font-semibold active:scale-95 transition-transform"
+            >
+              <AlertTriangle size={13} />
+              Qaytarish
+            </button>
           </div>
           <button
-            onClick={() => onReset?.(location.id)}
+            onClick={() => {
+              if (confirm('Bu joylashuvni o\'chirmoqchimisiz?')) onDelete?.(location.id);
+            }}
             disabled={isLoading}
-            className="flex items-center gap-1 px-3 py-2 bg-gray-800 border border-gray-700 text-gray-300 rounded-xl text-xs font-semibold active:scale-95 transition-transform"
+            className="w-full flex items-center justify-center gap-1 py-2 bg-gray-800/60 border border-gray-700 text-gray-500 rounded-xl text-xs font-medium active:scale-95 transition-transform"
           >
-            <AlertTriangle size={13} />
-            Qayta ko'rish
+            <Trash2 size={13} />
+            O'chirish
           </button>
         </div>
       )}
@@ -213,6 +254,7 @@ export default function AdminPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
   const [isLocating, setIsLocating] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [photoViewer, setPhotoViewer] = useState<{ photos: string[]; index: number } | null>(null);
 
   const isAdmin = Boolean(user?.isAdmin || user?.username === 'admin');
@@ -296,7 +338,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-locations-reviewed'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['map-trees'] });
-      toast.success(action === 'VERIFIED' ? '✅ Tasdiqlandi — daraxt bor!' : '🚨 Rad etildi — daraxt yo\'q');
+      toast.success(action === 'VERIFIED' ? '✅ Tasdiqlandi — GT tokenlar foydalanuvchiga berildi!' : '🚨 Rad etildi — joylashuv xaritadan olib tashlandi');
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Joylashuvni yangilashda xatolik');
@@ -316,6 +358,22 @@ export default function AdminPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Xatolik');
+    },
+  });
+
+  const deleteLocationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/admin/tree-locations/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-locations-review'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-locations-reviewed'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['map-trees'] });
+      toast.success('Joylashuv o\'chirildi');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'O\'chirishda xatolik');
     },
   });
 
@@ -479,7 +537,7 @@ export default function AdminPage() {
             </div>
 
             <div className="card mt-3">
-              <h3 className="font-semibold text-gray-300 mb-3">Daraxtlar holati</h3>
+              <h3 className="font-semibold text-gray-300 mb-3">Joylashuvlar holati</h3>
               <div className="space-y-2">
                 {Object.entries(dashboard.treesByStatus || {}).map(([status, count]) => (
                   <div key={status} className="flex items-center justify-between">
@@ -494,7 +552,7 @@ export default function AdminPage() {
                               : 'text-yellow-400'
                       }`}
                     >
-                      {status}
+                      {{ VERIFIED: '✅ Tasdiqlangan', FRAUD: '🚨 Firibgarlik', DISPUTED: '⚠️ Munozarali', PENDING: '⏳ Kutilmoqda' }[status] || status}
                     </span>
                     <span className="font-bold text-white">{count as number}</span>
                   </div>
@@ -583,10 +641,34 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <button onClick={fillCurrentLocation} className="btn-secondary w-full" type="button">
-              <LocateFixed size={16} className={isLocating ? 'animate-spin' : ''} />
-              {isLocating ? 'Joylashuv olinmoqda...' : 'Joriy joylashuvni olish'}
-            </button>
+            <div className="flex gap-2">
+              <button onClick={fillCurrentLocation} className="btn-secondary flex-1" type="button">
+                <LocateFixed size={16} className={isLocating ? 'animate-spin' : ''} />
+                {isLocating ? 'Olinmoqda...' : 'Joriy joylashuv'}
+              </button>
+              <button
+                onClick={() => setShowMapPicker(v => !v)}
+                className={`btn-secondary flex-1 ${showMapPicker ? 'border-primary-600 text-primary-400' : ''}`}
+                type="button"
+              >
+                <Map size={16} />
+                Xaritadan tanlash
+              </button>
+            </div>
+
+            {showMapPicker && (
+              <LocationPicker
+                lat={form.lat ? Number(form.lat) : undefined}
+                lng={form.lng ? Number(form.lng) : undefined}
+                onPick={(lat, lng) => {
+                  setForm(current => ({
+                    ...current,
+                    lat: lat.toFixed(6),
+                    lng: lng.toFixed(6),
+                  }));
+                }}
+              />
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -608,10 +690,10 @@ export default function AdminPage() {
                   value={form.status}
                   onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as TreeStatus }))}
                 >
-                  <option value="PENDING">PENDING</option>
-                  <option value="VERIFIED">VERIFIED</option>
-                  <option value="DISPUTED">DISPUTED</option>
-                  <option value="FRAUD">FRAUD</option>
+                  <option value="PENDING">⏳ Kutilmoqda</option>
+                  <option value="VERIFIED">✅ Tasdiqlangan</option>
+                  <option value="DISPUTED">⚠️ Munozarali</option>
+                  <option value="FRAUD">🚨 Firibgarlik</option>
                 </select>
               </div>
 
@@ -707,7 +789,7 @@ export default function AdminPage() {
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Eye size={18} className="text-blue-400" />
-            <h2 className="font-bold text-gray-300">Joylashuvlarni tekshirish</h2>
+            <h2 className="font-bold text-gray-300">Joylashuvlarni ko'rib chiqish</h2>
           </div>
 
           {/* Tabs */}
@@ -730,7 +812,7 @@ export default function AdminPage() {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Ko'rilgan ({reviewedLocations?.total || '...'})
+              ✅ Ko'rib chiqilgan ({reviewedLocations?.total || '...'})
             </button>
           </div>
 
@@ -744,14 +826,15 @@ export default function AdminPage() {
                   mode="pending"
                   onVerify={(id) => reviewLocationMutation.mutate({ id, action: 'VERIFIED' })}
                   onFraud={(id) => reviewLocationMutation.mutate({ id, action: 'FRAUD' })}
-                  isLoading={reviewLocationMutation.isPending}
+                  onDelete={(id) => deleteLocationMutation.mutate(id)}
+                  isLoading={reviewLocationMutation.isPending || deleteLocationMutation.isPending}
                   onViewPhoto={(photos, i) => setPhotoViewer({ photos, index: i })}
                 />
               ))}
               {!locationsForReview?.items?.length && (
                 <div className="text-center py-8 text-gray-500 card">
                   <div className="text-4xl mb-2">✓</div>
-                  <p>Tekshirishni kutayotgan joylashuv yo'q</p>
+                  <p>Tasdiqlashni kutayotgan joylashuv yo'q</p>
                 </div>
               )}
             </div>
@@ -766,14 +849,15 @@ export default function AdminPage() {
                   location={location}
                   mode="reviewed"
                   onReset={(id) => resetLocationMutation.mutate(id)}
-                  isLoading={resetLocationMutation.isPending}
+                  onDelete={(id) => deleteLocationMutation.mutate(id)}
+                  isLoading={resetLocationMutation.isPending || deleteLocationMutation.isPending}
                   onViewPhoto={(photos, i) => setPhotoViewer({ photos, index: i })}
                 />
               ))}
               {!reviewedLocations?.items?.length && (
                 <div className="text-center py-8 text-gray-500 card">
                   <div className="text-4xl mb-2">📋</div>
-                  <p>Ko'rilgan joylashuvlar yo'q</p>
+                  <p>Ko'rib chiqilgan joylashuvlar yo'q</p>
                 </div>
               )}
             </div>

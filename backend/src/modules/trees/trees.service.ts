@@ -47,7 +47,8 @@ export class TreesService {
    * Get all tree locations for map display
    */
   async getMapLocations(bounds?: { north: number; south: number; east: number; west: number }) {
-    const where: any = {};
+    // VERIFIED joylar mapdan yashiriladi (admin tasdiqlagan, vazifa bajarilgan)
+    const where: any = { isDeleted: false, status: { not: 'VERIFIED' } };
     if (bounds) {
       where.lat = { gte: bounds.south, lte: bounds.north };
       where.lng = { gte: bounds.west, lte: bounds.east };
@@ -207,11 +208,12 @@ export class TreesService {
       },
     });
 
-    // Update tree status
+    // Update tree status — VERIFIED faqat admin tasdiqlagandan so'ng beriladi
     const discrepancy = Math.abs(cvResult.treeCount - tree.stateReportedCount);
     const discrepancyRate = discrepancy / tree.stateReportedCount;
 
-    let newStatus = 'VERIFIED';
+    // CV natijasi saqlanadi lekin VERIFIED emas — admin tasdiqlashi kerak
+    let newStatus = 'PENDING';
     if (discrepancyRate > 0.5) newStatus = 'DISPUTED';
     if (cvResult.treeCount === 0) newStatus = 'FRAUD';
 
@@ -220,29 +222,20 @@ export class TreesService {
       data: {
         status: newStatus as any,
         actualCount: cvResult.treeCount,
-        verifiedByUserId: userId,
-        verifiedAt: new Date(),
         blockchainHash: blockchainRecord.thisHash,
       },
     });
 
-    // Award tokens
-    await this.awardTokens(userId, tokensEarned, 'EARNED_VERIFY', verification.id);
-
-    // Update leaderboard
-    await this.redis.zincrby('leaderboard:global', tokensEarned, userId);
-
+    // Tokenlar admin tasdiqlagandan KEYIN beriladi, hozir saqlab qo'yiladi
     // Auto-create fraud report if needed
     if (newStatus === 'FRAUD' || newStatus === 'DISPUTED') {
       await this.createAutoFraudReport(tree, verification, cvResult, fraudRisk, userId);
     }
 
-    // Check quest progress
-    await this.updateQuestProgress(userId, isMonitoring ? 'monitor' : 'verify');
-
     return {
       verification: this.normalizeVerification(verification),
-      tokensEarned,
+      tokensEarned: 0, // Admin tasdiqlamaguncha 0
+      pendingTokens: tokensEarned, // Admin tasdiqlasa beriladigan miqdor
       newStatus,
       aiAnalysis,
       fraudRisk,

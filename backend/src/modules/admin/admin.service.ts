@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OllamaService } from '../../common/ollama/ollama.service';
 import { BlockchainService } from '../../common/blockchain/blockchain.service';
-import { parseJson } from '../../common/utils/json-field';
+import { RedisService } from '../../common/redis/redis.service';
+import { parseJson, serializeJson } from '../../common/utils/json-field';
 import { CreateTreeLocationDto } from './dto/create-tree-location.dto';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class AdminService {
     private prisma: PrismaService,
     private ollama: OllamaService,
     private blockchain: BlockchainService,
+    private redis: RedisService,
   ) {}
 
   private normalizeVerification(verification: any) {
@@ -156,7 +158,7 @@ export class AdminService {
     action: 'VERIFIED' | 'FRAUD',
     notes?: string,
   ) {
-    return this.prisma.treeLocation.update({
+    const location = await this.prisma.treeLocation.update({
       where: { id: locationId },
       data: {
         status: action,
@@ -164,6 +166,52 @@ export class AdminService {
         verifiedAt: new Date(),
       },
     });
+
+    // Admin VERIFIED deb tasdiqlaganda — foydalanuvchiga tokenlar beriladi
+    if (action === 'VERIFIED') {
+      const verifications = await this.prisma.treeVerification.findMany({
+        where: { treeLocationId: locationId, rewarded: false },
+      });
+
+      for (const v of verifications) {
+        if (v.tokensEarned > 0) {
+          await this.awardTokens(v.userId, v.tokensEarned, v.id);
+          await this.prisma.treeVerification.update({
+            where: { id: v.id },
+            data: { rewarded: true },
+          });
+        }
+      }
+    }
+
+    return location;
+  }
+
+  private async awardTokens(userId: string, amount: number, refId: string) {
+    const lastToken = await this.prisma.greenToken.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const prevHash = lastToken?.blockchainHash || '0'.repeat(64);
+    const record = this.blockchain.createRecord('token', userId, 'mint', { amount }, userId, prevHash);
+
+    await this.prisma.greenToken.create({
+      data: {
+        userId,
+        amount,
+        transactionType: 'EARNED_VERIFY',
+        referenceId: refId,
+        blockchainHash: record.thisHash,
+        prevHash,
+      },
+    });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totalTokens: { increment: amount }, xp: { increment: Math.floor(amount * 10) } },
+    });
+
+    await this.redis.zincrby('leaderboard:global', amount, userId);
   }
 
   async getReviewedLocations(page = 1, limit = 20) {
@@ -260,6 +308,13 @@ export class AdminService {
     const available = await this.ollama.isAvailable();
     const models = available ? await this.ollama.listModels() : [];
     return { available, models };
+  }
+
+  async deleteTreeLocation(locationId: string) {
+    return this.prisma.treeLocation.update({
+      where: { id: locationId },
+      data: { isDeleted: true },
+    });
   }
 
   async createTreeLocation(adminId: string, data: CreateTreeLocationDto) {

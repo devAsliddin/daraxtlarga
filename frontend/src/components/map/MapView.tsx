@@ -15,7 +15,7 @@ interface TreeLocation {
   id: string;
   lat: number;
   lng: number;
-  status: 'PENDING' | 'VERIFIED' | 'DISPUTED' | 'FRAUD';
+  status: 'PENDING' | 'DISPUTED' | 'FRAUD';
   stateReportedCount: number;
   actualCount?: number;
   region: string;
@@ -24,11 +24,10 @@ interface TreeLocation {
 }
 
 const STATUS_CONFIG = {
-  PENDING:  { color: '#EAB308', label: 'Tekshirilmagan', emoji: '🟡' },
-  VERIFIED: { color: '#22C55E', label: 'Tasdiqlangan',   emoji: '✅' },
-  DISPUTED: { color: '#F97316', label: 'Munozarali',     emoji: '⚠️' },
-  FRAUD:    { color: '#EF4444', label: 'Firibgarlik',    emoji: '🚨' },
-};
+  PENDING:  { color: '#EAB308', label: 'Kutilmoqda',  emoji: '🟡' },
+  DISPUTED: { color: '#F97316', label: 'Munozarali',  emoji: '⚠️' },
+  FRAUD:    { color: '#EF4444', label: 'Firibgarlik', emoji: '🚨' },
+} as const;
 
 // Haversine masofasi (metr)
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -144,7 +143,7 @@ export default function MapView() {
         />
 
         {filteredTrees.map((tree) => {
-          const config = STATUS_CONFIG[tree.status];
+          const config = STATUS_CONFIG[tree.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.PENDING;
           const isSelected = selectedTree?.id === tree.id;
           return (
             <CircleMarker
@@ -243,7 +242,7 @@ export default function MapView() {
 
       {/* Legend */}
       <div className="absolute bottom-24 left-3 z-[999] bg-gray-900/90 backdrop-blur-sm rounded-xl p-3 border border-gray-700/60">
-        <p className="text-xs font-semibold text-gray-400 mb-2">Jami: {trees.length} ta joy</p>
+        <p className="text-xs font-semibold text-gray-400 mb-2">Faol: {trees.length} ta joy</p>
         {Object.entries(STATUS_CONFIG).map(([, config]) => (
           <div key={config.label} className="flex items-center gap-2 text-xs text-gray-400 mb-1 last:mb-0">
             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: config.color }} />
@@ -353,7 +352,7 @@ export default function MapView() {
                   )
                 ) : (
                   <div className="w-full text-center py-2.5 rounded-xl bg-gray-800/60 text-gray-400 text-xs">
-                    {selectedTree.status === 'VERIFIED' ? '✅ Bu joy allaqachon tasdiqlangan' : '🚨 Firibgarlik sifatida belgilangan'}
+                    🚨 Firibgarlik sifatida belgilangan
                   </div>
                 )}
               </div>

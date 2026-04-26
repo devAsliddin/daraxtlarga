@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -84,5 +84,11 @@ export class AdminController {
   @ApiOperation({ summary: 'Joylashuvni qayta ko\'rib chiqishga qaytarish' })
   resetTreeLocation(@Param('id') id: string) {
     return this.admin.resetTreeLocation(id);
+  }
+
+  @Delete('tree-locations/:id')
+  @ApiOperation({ summary: 'Joylashuvni o\'chirish (soft delete)' })
+  deleteTreeLocation(@Param('id') id: string) {
+    return this.admin.deleteTreeLocation(id);
   }
 }

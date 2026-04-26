@@ -56,6 +56,7 @@ model TreeLocation {
   plantationDate       DateTime?
   species              String?
   status               String    @default("PENDING")
+  isDeleted            Boolean   @default(false)
   verifiedByUserId     String?
   verifiedAt           DateTime?
   blockchainHash       String?
@@ -80,6 +81,7 @@ model TreeVerification {
   healthScore     Float?   // 0-100
   treeCount       Int?     // detected by CV
   tokensEarned    Float    @default(0)
+  rewarded        Boolean  @default(false)
   blockchainHash  String?
   prevHash        String?
   isMonitoring    Boolean  @default(false)
